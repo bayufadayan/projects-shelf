@@ -4,9 +4,10 @@ import { Project } from '@/lib/types';
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body: Omit<Project, 'id' | 'createdAt'> & { createdAt?: number } =
       await request.json();
 
@@ -20,16 +21,16 @@ export async function PUT(
         tags        = ${body.tags ?? null},
         featured    = ${body.featured ?? false},
         type_id     = ${body.typeId ?? null}
-      WHERE id = ${params.id}
+      WHERE id = ${id}
     `;
 
     // Replace platform links
-    await sql`DELETE FROM project_platform_link WHERE project_id = ${params.id}`;
+    await sql`DELETE FROM project_platform_link WHERE project_id = ${id}`;
     if (body.platformIds && body.platformIds.length > 0) {
       for (const platformId of body.platformIds) {
         await sql`
           INSERT INTO project_platform_link (project_id, platform_id)
-          VALUES (${params.id}, ${platformId})
+          VALUES (${id}, ${platformId})
           ON CONFLICT DO NOTHING
         `;
       }
@@ -44,14 +45,15 @@ export async function PUT(
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const { featured }: { featured: boolean } = await request.json();
     await sql`
       UPDATE projects
       SET featured = ${featured}
-      WHERE id = ${params.id}
+      WHERE id = ${id}
     `;
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -62,10 +64,11 @@ export async function PATCH(
 
 export async function DELETE(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await sql`DELETE FROM projects WHERE id = ${params.id}`;
+    const { id } = await params;
+    await sql`DELETE FROM projects WHERE id = ${id}`;
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(error);
