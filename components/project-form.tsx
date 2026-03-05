@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Project } from '@/lib/types';
+import { Project, ProjectType, ProjectPlatform } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -16,12 +16,21 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
 const projectSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters'),
   description: z.string().optional(),
+  typeId: z.string().optional(),
+  platformIds: z.array(z.string()).default([]),
   liveUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
   githubUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
   tags: z.string().optional(),
@@ -31,13 +40,15 @@ type ProjectFormData = z.infer<typeof projectSchema>;
 
 interface ProjectFormProps {
   initialData?: Project;
-  onSubmit: (data: Omit<Project, 'id' | 'createdAt'> & { id?: string; createdAt?: number }) => void;
+  projectTypes: ProjectType[];
+  projectPlatforms: ProjectPlatform[];
+  onSubmit: (data: Omit<Project, 'id' | 'createdAt' | 'typeName' | 'platformNames'> & { id?: string; createdAt?: number }) => void;
   onCancel: () => void;
   isLoading?: boolean;
 }
 
 const STEPS = [
-  { label: 'Basic Info', fields: ['title', 'description'] as const },
+  { label: 'Basic Info', fields: ['title', 'description', 'typeId', 'platformIds'] as const },
   { label: 'Links', fields: ['liveUrl', 'githubUrl'] as const },
   { label: 'Tags', fields: ['tags'] as const },
 ];
@@ -71,7 +82,7 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
   );
 }
 
-export function ProjectForm({ initialData, onSubmit, onCancel, isLoading }: ProjectFormProps) {
+export function ProjectForm({ initialData, projectTypes, projectPlatforms, onSubmit, onCancel, isLoading }: ProjectFormProps) {
   const isEdit = !!initialData;
   const [step, setStep] = useState(0);
 
@@ -80,6 +91,8 @@ export function ProjectForm({ initialData, onSubmit, onCancel, isLoading }: Proj
     defaultValues: {
       title: initialData?.title || '',
       description: initialData?.description || '',
+      typeId: initialData?.typeId || '',
+      platformIds: initialData?.platformIds ?? [],
       liveUrl: initialData?.liveUrl || '',
       githubUrl: initialData?.githubUrl || '',
       tags: initialData?.tags?.join(', ') || '',
@@ -90,14 +103,86 @@ export function ProjectForm({ initialData, onSubmit, onCancel, isLoading }: Proj
   const buildPayload = (data: ProjectFormData) => ({
     id: initialData?.id,
     createdAt: initialData?.createdAt,
+    featured: initialData?.featured ?? false,
     title: data.title,
     description: data.description || undefined,
+    typeId: data.typeId || undefined,
+    platformIds: data.platformIds?.length ? data.platformIds : undefined,
     liveUrl: data.liveUrl || undefined,
     githubUrl: data.githubUrl || undefined,
     tags: data.tags
       ? data.tags.split(',').map((t) => t.trim()).filter(Boolean)
       : undefined,
   });
+
+  const TypeSelectField = () => (
+    <FormField
+      control={form.control}
+      name="typeId"
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>Project Type</FormLabel>
+          <Select onValueChange={field.onChange} value={field.value}>
+            <FormControl>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a type..." />
+              </SelectTrigger>
+            </FormControl>
+            <SelectContent>
+              {projectTypes.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <FormDescription>Optional: Categorize your project</FormDescription>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+
+  const PlatformsField = () => (
+    <FormField
+      control={form.control}
+      name="platformIds"
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>Platforms</FormLabel>
+          <div className="flex flex-wrap gap-2 pt-1">
+            {projectPlatforms.map((p) => {
+              const selected = field.value?.includes(p.id);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    const current = field.value ?? [];
+                    field.onChange(
+                      selected
+                        ? current.filter((id) => id !== p.id)
+                        : [...current, p.id]
+                    );
+                  }}
+                  className={cn(
+                    'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                    selected
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border text-muted-foreground hover:border-primary hover:text-foreground'
+                  )}
+                >
+                  {p.title}
+                </button>
+              );
+            })}
+          </div>
+          <FormDescription>Optional: Select all applicable platforms</FormDescription>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
 
   // Edit mode: single-page form
   if (isEdit) {
@@ -118,6 +203,8 @@ export function ProjectForm({ initialData, onSubmit, onCancel, isLoading }: Proj
               <FormMessage />
             </FormItem>
           )} />
+          <TypeSelectField />
+          <PlatformsField />
           <FormField control={form.control} name="liveUrl" render={({ field }) => (
             <FormItem>
               <FormLabel>Live URL</FormLabel>
@@ -184,6 +271,8 @@ export function ProjectForm({ initialData, onSubmit, onCancel, isLoading }: Proj
                 <FormMessage />
               </FormItem>
             )} />
+            <TypeSelectField />
+            <PlatformsField />
           </>
         )}
 
